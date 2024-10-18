@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import android.widget.Toast
 
 class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
 
@@ -43,12 +44,14 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
     private val playerIcon = BitmapFactory.decodeResource(context.resources, R.drawable.humanicon)
     private val aiIcon = BitmapFactory.decodeResource(context.resources, R.drawable.aiicon)
 
+    private val targetPaint = Paint().apply { color = Color.GREEN }
+    private val targetRadius = 30f
+
     private var playerPosition = Pair(0, 1)
     private var aiPosition = Pair(0, 13)
     private val targetPosition = Pair(22, 7)
 
     private val pathPaint = Paint().apply { color = Color.WHITE }
-
 
 
     private var aiSteps: List<Pair<Int, Int>> = emptyList()
@@ -61,6 +64,7 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
         drawMaze(canvas)
         drawPlayer(canvas)
         drawAI(canvas)
+        drawTarget(canvas)
     }
 
     private fun drawMaze(canvas: Canvas) {
@@ -73,10 +77,17 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
                 val bottom = top + cellSize
 
                 if (maze[i][j] == 1) {
-                    val scaledBitmap = Bitmap.createScaledBitmap(wallBitmap, cellSize, cellSize, false)
+                    val scaledBitmap =
+                        Bitmap.createScaledBitmap(wallBitmap, cellSize, cellSize, false)
                     canvas.drawBitmap(scaledBitmap, left.toFloat(), top.toFloat(), null)
                 } else {
-                    canvas.drawRect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat(), pathPaint)
+                    canvas.drawRect(
+                        left.toFloat(),
+                        top.toFloat(),
+                        right.toFloat(),
+                        bottom.toFloat(),
+                        pathPaint
+                    )
                 }
             }
         }
@@ -101,26 +112,36 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
         canvas.drawBitmap(resizedAIIcon, cx, cy, null)
     }
 
+    private fun drawTarget(canvas: Canvas) {
+        val cellSize = width / maze[0].size
+        val cx = (targetPosition.second * cellSize + cellSize / 2).toFloat()
+        val cy = (targetPosition.first * cellSize + cellSize / 2).toFloat()
+        canvas.drawCircle(cx, cy, targetRadius, targetPaint)
+    }
     fun movePlayer(dx: Int, dy: Int) {
         if (playerTurn) {
             val newPos = Pair(playerPosition.first + dy, playerPosition.second + dx)
             if (isValidMove(newPos)) {
                 playerPosition = newPos
                 Log.d("MazeGame", "Player moved to: $newPos")
-                invalidate()
+                invalidate()  // Redraw the screen
                 playerTurn = false
-                moveAI()
+                // Check for winner
+                if (playerPosition == targetPosition) {
+                    showToast("PLAYER WON")
+                } else {
+                    moveAI()
+                }
             } else {
                 Log.d("MazeGame", "Invalid player move: $newPos is a wall")
             }
         }
     }
-
     fun startGame() {
         Log.d("MazeGame", "Game started")
         findPathToTarget()
         if (aiSteps.isNotEmpty()) {
-            aiPosition = aiSteps[currentAiStepIndex] // AI'nin ilk adımını ayarla
+            aiPosition = aiSteps[currentAiStepIndex]
             Log.d("MazeGame", "AI starts at: $aiPosition")
             invalidate()
             moveAI()
@@ -128,8 +149,6 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
             Log.d("MazeGame", "No path found for AI to target.")
         }
     }
-
-
     private fun moveAI() {
         if (!playerTurn && aiSteps.isNotEmpty() && currentAiStepIndex < aiSteps.size) {
             postDelayed({
@@ -138,12 +157,17 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
                 Log.d("MazeGame", "AI moved to: $aiPosition")
                 invalidate()
                 playerTurn = true
+                if (aiPosition == targetPosition) {
+                    showToast("AI WON")
+                } else {
+                    moveAI()
+                }
             }, 500)
+
         } else {
             Log.d("MazeGame", "AI reached the target or has no moves left")
         }
     }
-
     private fun findPathToTarget() {
         val visited = mutableSetOf<Pair<Int, Int>>()
         val bestPath = mutableListOf<Pair<Int, Int>>()
@@ -162,7 +186,7 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
                 bestPath.addAll(path)
                 Log.d("MazeGame", "New best path found: $bestPath")
             }
-            path.removeAt(path.size - 1)  // Geri dönme
+            path.removeAt(path.size - 1)
             return true
         }
 
@@ -183,9 +207,11 @@ class MazeView(context: Context, attrs: AttributeSet) : View(context, attrs) {
 
         return false
     }
-
     private fun isValidMove(position: Pair<Int, Int>): Boolean {
         val (x, y) = position
         return x in maze.indices && y in maze[0].indices && maze[x][y] == 0
+    }
+    private fun showToast(message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 }
